@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
-from .handicap import burden_points, layoff_points, weight_change_points
+from .handicap import burden_points, condition_points, layoff_points, weight_change_points
 from .jockey import jockey_points, workout_points
 from .models import Horse, RaceConditions
 from .pace import classify_pace, draw_points, pace_points
@@ -74,8 +74,12 @@ def evaluate(horses: list[Horse], race: RaceConditions) -> tuple[list[Assessment
         a.factors["騎手/厩舎"] = jk_pts
         a.factors["追い切り"] = workout_points(h.workout)
         a.factors["ローテ"], days = layoff_points(h, race.date)
+        all_runs = all_run_ratings(h, race)
+        cond_pts, cond_note = condition_points(h, all_runs)
+        a.factors["馬体重"] = cond_pts
+        a.notes["馬体重"] = cond_note
         if lap is not None:
-            shape_pts, corner_pts, lap_note = lap_aptitude(h, lap, all_run_ratings(h, race))
+            shape_pts, corner_pts, lap_note = lap_aptitude(h, lap, all_runs)
             a.factors["ラップ適性"] = shape_pts
             a.factors["4角位置"] = corner_pts
             a.notes["ラップ"] = lap_note

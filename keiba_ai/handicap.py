@@ -66,3 +66,42 @@ def layoff_points(horse: Horse, race_date) -> tuple[float, int | None]:
     else:
         base = -3.2
     return base + horse.freshness, days
+
+
+# 適正体重から1kg外れるごとの減点
+WEIGHT_DEV_POINTS = 0.035
+WEIGHT_DEV_CAP = 1.2
+
+
+def condition_points(horse: Horse, ratings) -> tuple[float, str]:
+    """当日馬体重の評価。
+
+    増減の絶対値だけを見るのは誤り。大事なのは「その馬が good な走りをしたときの
+    体重に対して、今日はどうか」。
+    たとえばグランヴィノスは 520kg で1着、524kg で2着、532kg で6着(1番人気)。
+    9ヵ月ぶりで -12kg の 520kg は「減った」のではなく「best の体重に戻った」。
+    """
+    scored = [(r, p) for r, p in ratings if r.body_weight]
+    if not scored or not horse.body_weight:
+        return 0.0, ""
+
+    # 「good な体重」は指数ではなく着差で測る。
+    # 指数は時計が速ければ人気を裏切った凡走でも高く出るので、体調の指標には向かない。
+    # (グランヴィノスは532kgの鳴尾記念が1番人気6着。指数は高いが体調面では
+    #  評価できない走で、これを好走時体重に混ぜると読みが逆になる)
+    runs = sorted(scored, key=lambda x: max(x[0].margin, 0.0))[:3]
+    wts = [1.0 / (max(r.margin, 0.0) + 0.4) for r, _ in runs]
+    best_w = sum(r.body_weight * w for (r, _), w in zip(runs, wts)) / sum(wts)
+
+    dev = horse.body_weight - best_w
+    scale = 1.0
+    note_extra = ""
+    if horse.age == 3 and dev > 0:
+        # 3歳秋の増加は成長分が含まれるので割り引いて見る
+        scale = 0.5
+        note_extra = " ※3歳の増加は成長分として割引"
+
+    pts = max(-WEIGHT_DEV_CAP, -abs(dev) * WEIGHT_DEV_POINTS * scale)
+    note = (f"今回{horse.body_weight}kg / 好走時の体重 約{best_w:.0f}kg "
+            f"({dev:+.0f}kg){note_extra}")
+    return pts, note

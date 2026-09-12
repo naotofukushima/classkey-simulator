@@ -96,8 +96,9 @@ class Horse:
     stable: str                # 栗東 / 美浦
     sire: str
     broodmare_sire: str
-    body_weight: int           # 想定馬体重(前走実測)
+    body_weight: int           # 当日馬体重
     style: str                 # 逃げ / 先行 / 好位 / 差し / 追込
+    body_weight_change: Optional[int] = None   # 前走からの増減
     odds: Optional[float] = None
     popularity: Optional[int] = None
     workout: int = 3           # 追い切り評価 1-5

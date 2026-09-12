@@ -16,7 +16,8 @@
     "bias_inside": 0.15,
     "bias_closer": 0.6,
     "note": "4回阪神開幕2週目・野芝。火〜金昼までに89mmの降雨で金曜時点やや重、土曜は晴れ時々曇で良まで回復見込み。クッション値7.8(やや軟)、含水率 芝ゴール前15.6%/4角16.2%。時計は速く、直線はやや内〜フラット、差しが利く想定。",
-    "odds_asof": "2026-09-12 14:56 JST"
+    "odds_asof": "2026-09-12 14:56 JST",
+    "weights_asof": "2026-09-12 当日発表"
   },
   "horses": [
     {
@@ -31,7 +32,7 @@
       "stable": "美浦",
       "sire": "キタサンブラック",
       "broodmare_sire": "ロードカナロア",
-      "body_weight": 512,
+      "body_weight": 516,
       "style": "差し",
       "odds": 45.3,
       "popularity": 14,
@@ -110,7 +111,8 @@
           "body_weight": 512,
           "track": "中山芝2500"
         }
-      ]
+      ],
+      "body_weight_change": 4
     },
     {
       "num": 2,
@@ -124,7 +126,7 @@
       "stable": "栗東",
       "sire": "サートゥルナーリア",
       "broodmare_sire": "ハーツクライ",
-      "body_weight": 508,
+      "body_weight": 516,
       "style": "逃げ",
       "odds": 15.9,
       "popularity": 7,
@@ -203,7 +205,8 @@
           "last3f": 37.6,
           "body_weight": 508
         }
-      ]
+      ],
+      "body_weight_change": 8
     },
     {
       "num": 3,
@@ -317,7 +320,8 @@
           "track": "京都芝1800外",
           "time": 105.5
         }
-      ]
+      ],
+      "body_weight_change": 0
     },
     {
       "num": 4,
@@ -331,7 +335,7 @@
       "stable": "栗東",
       "sire": "ドゥラメンテ",
       "broodmare_sire": "Concorde's Tune",
-      "body_weight": 492,
+      "body_weight": 494,
       "style": "差し",
       "odds": 13.2,
       "popularity": 6,
@@ -443,7 +447,8 @@
           "track": "京都芝1600外",
           "time": 94.7
         }
-      ]
+      ],
+      "body_weight_change": 2
     },
     {
       "num": 5,
@@ -457,7 +462,7 @@
       "stable": "美浦",
       "sire": "グレーターロンドン",
       "broodmare_sire": "ジャングルポケット",
-      "body_weight": 454,
+      "body_weight": 460,
       "style": "逃げ",
       "odds": 29.5,
       "popularity": 10,
@@ -581,7 +586,8 @@
           "track": "中京芝2000",
           "time": 118.1
         }
-      ]
+      ],
+      "body_weight_change": 6
     },
     {
       "num": 6,
@@ -678,7 +684,8 @@
           "track": "中京芝2000",
           "time": 120.0
         }
-      ]
+      ],
+      "body_weight_change": 0
     },
     {
       "num": 7,
@@ -692,7 +699,7 @@
       "stable": "栗東",
       "sire": "ルーラーシップ",
       "broodmare_sire": "マンハッタンカフェ",
-      "body_weight": 500,
+      "body_weight": 496,
       "style": "先行",
       "odds": 12.9,
       "popularity": 5,
@@ -809,7 +816,8 @@
           "track": "京都芝3000外",
           "time": 190.8
         }
-      ]
+      ],
+      "body_weight_change": -4
     },
     {
       "num": 8,
@@ -823,7 +831,7 @@
       "stable": "美浦",
       "sire": "レイデオロ",
       "broodmare_sire": "ハーツクライ",
-      "body_weight": 472,
+      "body_weight": 468,
       "style": "差し",
       "odds": 16.2,
       "popularity": 8,
@@ -940,7 +948,8 @@
           "last3f": 37.8,
           "body_weight": 476
         }
-      ]
+      ],
+      "body_weight_change": -4
     },
     {
       "num": 9,
@@ -954,7 +963,7 @@
       "stable": "栗東",
       "sire": "エピファネイア",
       "broodmare_sire": "Candy Ride",
-      "body_weight": 496,
+      "body_weight": 508,
       "style": "差し",
       "odds": 3.6,
       "popularity": 1,
@@ -1060,7 +1069,8 @@
           "track": "中山芝2000",
           "time": 119.3
         }
-      ]
+      ],
+      "body_weight_change": 12
     },
     {
       "num": 10,
@@ -1074,7 +1084,7 @@
       "stable": "栗東",
       "sire": "ヤマカツエース",
       "broodmare_sire": "ハーツクライ",
-      "body_weight": 504,
+      "body_weight": 508,
       "style": "追込",
       "odds": 8.1,
       "popularity": 4,
@@ -1171,7 +1181,8 @@
           "track": "小倉芝1800",
           "time": 105.2
         }
-      ]
+      ],
+      "body_weight_change": 4
     },
     {
       "num": 11,
@@ -1185,7 +1196,7 @@
       "stable": "美浦",
       "sire": "ドゥラメンテ",
       "broodmare_sire": "オルフェーヴル",
-      "body_weight": 454,
+      "body_weight": 458,
       "style": "差し",
       "odds": 4.2,
       "popularity": 2,
@@ -1301,7 +1312,8 @@
           "track": "東京芝1800",
           "note": "走破タイムの信頼性が低いため速度指数の対象外"
         }
-      ]
+      ],
+      "body_weight_change": 4
     },
     {
       "num": 12,
@@ -1315,7 +1327,7 @@
       "stable": "栗東",
       "sire": "キズナ",
       "broodmare_sire": "Burning Roma",
-      "body_weight": 468,
+      "body_weight": 472,
       "style": "逃げ",
       "odds": 43.6,
       "popularity": 13,
@@ -1417,7 +1429,8 @@
           "track": "小倉芝2000",
           "time": 119.4
         }
-      ]
+      ],
+      "body_weight_change": 4
     },
     {
       "num": 13,
@@ -1431,7 +1444,7 @@
       "stable": "栗東",
       "sire": "キタサンブラック",
       "broodmare_sire": "Machiavellian",
-      "body_weight": 532,
+      "body_weight": 520,
       "style": "好位",
       "odds": 20.8,
       "popularity": 9,
@@ -1526,7 +1539,8 @@
           "track": "阪神芝1800外",
           "time": 106.2
         }
-      ]
+      ],
+      "body_weight_change": -12
     },
     {
       "num": 14,
@@ -1641,7 +1655,8 @@
           "track": "阪神芝2200",
           "time": 132.2
         }
-      ]
+      ],
+      "body_weight_change": 0
     },
     {
       "num": 15,
@@ -1655,7 +1670,7 @@
       "stable": "栗東",
       "sire": "エピファネイア",
       "broodmare_sire": "Footstepsinthesand",
-      "body_weight": 474,
+      "body_weight": 478,
       "style": "差し",
       "odds": 6.6,
       "popularity": 3,
@@ -1764,7 +1779,8 @@
           "track": "京都芝3000外",
           "time": 184.7
         }
-      ]
+      ],
+      "body_weight_change": 4
     },
     {
       "num": 16,
@@ -1778,7 +1794,7 @@
       "stable": "栗東",
       "sire": "モーリス",
       "broodmare_sire": "スペシャルウィーク",
-      "body_weight": 490,
+      "body_weight": 496,
       "style": "差し",
       "odds": 103.1,
       "popularity": 15,
@@ -1852,7 +1868,8 @@
           "last3f": 39.9,
           "body_weight": 482
         }
-      ]
+      ],
+      "body_weight_change": 6
     }
   ]
 }

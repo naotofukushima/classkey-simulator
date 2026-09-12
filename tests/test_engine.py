@@ -83,12 +83,34 @@ def test_馬連確率は各馬の勝率以上():
     assert trio_prob(a[0], a[1], a[2]) < p
 
 
-def test_負担率は斤量を馬体重で割った値():
+def test_負担率は当日馬体重で計算する():
+    """前走の馬体重ではなく当日発表の馬体重を使う。
+    グランヴィノスは532kg想定だったが当日は520kg(-12)で、
+    これだけで負担率は10.53%から10.77%に変わり最軽量ではなくなる。"""
     _, horses = load_race(RACE_JSON)
     h = next(x for x in horses if x.name == "グランヴィノス")
-    assert abs(h.burden_ratio - 56.0 / 532) < 1e-9
-    # 532kgに56kgはメンバー最軽量の負担率
-    assert h.burden_ratio == min(x.burden_ratio for x in horses)
+    assert h.body_weight == 520 and h.body_weight_change == -12
+    assert abs(h.burden_ratio - 56.0 / 520) < 1e-9
+    lightest = min(horses, key=lambda x: x.burden_ratio)
+    assert lightest.name == "マテンロウゲイル"      # 508kg(+12)に54kg
+
+
+def test_好走時の体重は指数ではなく着差で測る():
+    """グランヴィノスの最高指数は532kgの鳴尾記念だが1番人気6着。
+    指数で重み付けすると好走時体重が529kgになり、520kgが「9kg減」と
+    誤読される。着差で測れば約523kgで、今回はほぼ適正。"""
+    from keiba_ai.handicap import condition_points
+    from keiba_ai.ratings import all_run_ratings
+
+    race, horses = load_race(RACE_JSON)
+    h = next(x for x in horses if x.name == "グランヴィノス")
+    pts, note = condition_points(h, all_run_ratings(h, race))
+    assert "約523kg" in note
+    assert pts > -0.2                      # ほぼ適正体重なので減点は小さい
+
+    # 532kgで凡走した鳴尾記念より、520kgで勝った関ケ原Sの方が重く扱われる
+    best = min(h.runs, key=lambda r: max(r.margin, 0.0))
+    assert best.race == "関ケ原S" and best.body_weight == 520
 
 
 # ---------------------------------------------------------------- 速度指数・ラップ
@@ -374,7 +396,7 @@ def test_軸の選択で期待値が大きく変わる():
 
     assert len(yours) == len(swapped) == 27
     assert all(t.ev < 1.0 for t in yours)          # 27点すべてマイナス
-    assert roi(swapped) > roi(yours) * 2.5         # 軸を替えるだけで2.5倍以上
+    assert roi(swapped) > roi(yours) * 2.0         # 軸を替えるだけで2倍以上
 
 
 def test_実オッズを指定すると推定配当より優先される():

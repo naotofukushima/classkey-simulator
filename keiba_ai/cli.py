@@ -141,6 +141,8 @@ def main() -> None:
                 print(f"     {k:<12} {v:+6.2f} {bar * min(int(abs(v) * 4), 24)}")
             print(f"   負担率 {a.notes['負担率']} / {a.notes['斤量増減']} / {a.notes['間隔']}")
             print(f"   血統 {a.notes['血統']}")
+            if a.notes.get("馬体重"):
+                print(f"   馬体重 {a.notes['馬体重']}")
             if a.notes.get("ラップ"):
                 print(f"   ラップ {a.notes['ラップ']}")
             if h.course_note:
