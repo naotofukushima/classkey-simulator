@@ -270,7 +270,7 @@ def parse_spec(spec: str, field: list[int]) -> list[tuple[str, tuple[int, ...]]]
     軸流し   : "ワイド:13-全"
     """
     out: list[tuple[str, tuple[int, ...]]] = []
-    for item in spec.split(";"):
+    for item in _normalize_spec(spec).split(";"):
         item = item.strip()
         if not item:
             continue
@@ -284,7 +284,15 @@ def parse_spec(spec: str, field: list[int]) -> list[tuple[str, tuple[int, ...]]]
             else:
                 groups.append([int(x) for x in g.split(",")])
         if all(len(g) == 1 for g in groups):
-            out.append((kind, tuple(sorted(g[0] for g in groups))))
+            # 単点指定でも列数は検証する("3連複:13-15" のような指定を弾く)
+            legs = tuple(sorted(g[0] for g in groups))
+            expected = {"3連複": 3, "馬連": 2, "ワイド": 2, "単勝": 1}.get(kind)
+            if expected is None:
+                raise ValueError(f"未知の券種: {kind}")
+            if len(legs) != expected or len(set(legs)) != expected:
+                raise ValueError(
+                    f"{kind}は{expected}頭で指定してください(指定は{len(set(legs))}頭)")
+            out.append((kind, legs))
         else:
             for legs in expand_formation(groups, kind, field):
                 out.append((kind, legs))
@@ -310,7 +318,7 @@ def tickets_from_spec(spec: str, assessments: list[Assessment], w: float = AI_WE
 
     field = [a.horse.num for a in assessments]
     out: list[Ticket] = []
-    for kind, legs in parse_spec(_normalize_spec(spec), field):
+    for kind, legs in parse_spec(spec, field):
         if kind not in TAKEOUT:
             raise ValueError(f"未知の券種: {kind}")
         for n in legs:
