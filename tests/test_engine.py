@@ -375,3 +375,22 @@ def test_軸の選択で期待値が大きく変わる():
     assert len(yours) == len(swapped) == 27
     assert all(t.ev < 1.0 for t in yours)          # 27点すべてマイナス
     assert roi(swapped) > roi(yours) * 2.5         # 軸を替えるだけで2.5倍以上
+
+
+def test_実オッズを指定すると推定配当より優先される():
+    """複勝系の配当は推定値でしかないので、本物のオッズが分かるなら必ずそちらを使う。"""
+    a = _assess()
+    est = tickets_from_spec("3連複:9-13-15", a)[0]
+    real = tickets_from_spec("3連複:9-13-15@42.9", a)[0]
+    assert real.payout == 42.9
+    assert real.legs == est.legs and real.ai_prob == est.ai_prob   # 的中率は変わらない
+    assert est.payout != 42.9                                      # 推定はズレていた
+
+
+def test_実オッズ指定はフォーメーションや複数券と併用できる():
+    a = _assess()
+    ts = tickets_from_spec("単勝:13@20.5;馬連:9-13@33.3;3連複:13-4-全", a)
+    tan = next(t for t in ts if t.kind == "単勝")
+    uma = next(t for t in ts if t.kind == "馬連")
+    assert tan.payout == 20.5 and uma.payout == 33.3
+    assert sum(1 for t in ts if t.kind == "3連複") == 14    # 全=残り14頭に展開

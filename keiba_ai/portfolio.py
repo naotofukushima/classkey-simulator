@@ -276,6 +276,7 @@ def parse_spec(spec: str, field: list[int]) -> list[tuple[str, tuple[int, ...]]]
             continue
         kind, _, body = item.partition(":")
         kind = kind.strip()
+        body, _, _odds = body.partition("@")      # 実オッズ指定は tickets_from_spec 側で拾う
         groups = []
         for g in body.split("-"):
             g = g.strip()
@@ -317,6 +318,18 @@ def tickets_from_spec(spec: str, assessments: list[Assessment], w: float = AI_WE
         return (1.0 - TAKEOUT[kind]) / mkt_prob * PAYOUT_HAIRCUT[kind]
 
     field = [a.horse.num for a in assessments]
+
+    # "3連複:9-13-15@42.9" のように実オッズを指定できる。
+    # 推定配当より実オッズが分かっているならそちらを使うべき。
+    real: dict[tuple[str, tuple[int, ...]], float] = {}
+    for item in _normalize_spec(spec).split(";"):
+        if "@" not in item:
+            continue
+        head, _, od = item.partition("@")
+        k, _, body = head.partition(":")
+        for kk, legs in parse_spec(f"{k.strip()}:{body}", field):
+            real[(kk, legs)] = float(od)
+
     out: list[Ticket] = []
     for kind, legs in parse_spec(spec, field):
         if kind not in TAKEOUT:
@@ -327,19 +340,23 @@ def tickets_from_spec(spec: str, assessments: list[Assessment], w: float = AI_WE
         names = tuple(ai[n].horse.name for n in legs)
 
         if kind == "単勝":
-            out.append(Ticket(kind, legs, names, bmap[legs[0]].win_prob, ai[legs[0]].horse.odds))
+            od = real.get((kind, legs), ai[legs[0]].horse.odds)
+            out.append(Ticket(kind, legs, names, bmap[legs[0]].win_prob, od))
         elif kind == "馬連":
             mkt = exacta_pair_prob(vmap[legs[0]], vmap[legs[1]], views)
             prob = exacta_pair_prob(bmap[legs[0]], bmap[legs[1]], bl)
-            out.append(Ticket(kind, legs, names, prob, payout(kind, mkt)))
+            out.append(Ticket(kind, legs, names, prob,
+                               real.get((kind, legs), payout(kind, mkt))))
         elif kind == "ワイド":
             mkt = _pair_in_top3(views, vmap[legs[0]], vmap[legs[1]])
             prob = _pair_in_top3(bl, bmap[legs[0]], bmap[legs[1]])
-            out.append(Ticket(kind, legs, names, prob, payout(kind, mkt)))
+            out.append(Ticket(kind, legs, names, prob,
+                               real.get((kind, legs), payout(kind, mkt))))
         else:  # 3連複
             mkt = trio_prob(*(vmap[n] for n in legs), field=views)
             prob = trio_prob(*(bmap[n] for n in legs), field=bl)
-            out.append(Ticket(kind, legs, names, prob, payout(kind, mkt)))
+            out.append(Ticket(kind, legs, names, prob,
+                               real.get((kind, legs), payout(kind, mkt))))
     return out
 
 
