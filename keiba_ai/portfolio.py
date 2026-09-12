@@ -219,6 +219,78 @@ def allocate(
     return sorted(out, key=lambda t: (-t.stake, -t.ev))
 
 
+def expand_formation(groups: list[list[int]], kind: str, field: list[int]) -> list[tuple[int, ...]]:
+    """フォーメーションを組合せに展開する。
+
+    例 3連複 [14] - [10,15] - [全] なら、14と(10か15)を含む3頭の組合せすべて。
+    3連複・ワイド・馬連は順不同なので、重複を除いた集合として扱う。
+    """
+    size = {"3連複": 3, "馬連": 2, "ワイド": 2, "単勝": 1}[kind]
+    if len(groups) != size:
+        raise ValueError(f"{kind}は{size}列で指定してください(指定は{len(groups)}列)")
+
+    seen: set[tuple[int, ...]] = set()
+    out: list[tuple[int, ...]] = []
+
+    def rec(i: int, chosen: list[int]):
+        if i == size:
+            key = tuple(sorted(chosen))
+            if len(set(chosen)) == size and key not in seen:
+                seen.add(key)
+                out.append(key)
+            return
+        for n in groups[i]:
+            if n in chosen:
+                continue
+            rec(i + 1, chosen + [n])
+
+    rec(0, [])
+    return out
+
+
+def _normalize_spec(spec: str) -> str:
+    """券の区切りを ";" に統一する。
+
+    "," は列内の区切り(フォーメーション)にも使うので、単純に置換できない。
+    "," で割った断片が全て券種指定(":"を含む)のときだけ、券の区切りとみなす。
+    """
+    if ";" in spec:
+        return spec
+    parts = [x.strip() for x in spec.split(",") if x.strip()]
+    if len(parts) > 1 and all(":" in x for x in parts):
+        return ";".join(parts)
+    return spec
+
+
+def parse_spec(spec: str, field: list[int]) -> list[tuple[str, tuple[int, ...]]]:
+    """買い目文字列を (券種, 馬番の組) のリストに展開する。
+
+    単点     : "3連複:4-9-13"
+    フォーメ : "3連複:14-10,15-全"   (列は - 区切り、列内は , 区切り、全=全馬)
+    軸流し   : "ワイド:13-全"
+    """
+    out: list[tuple[str, tuple[int, ...]]] = []
+    for item in spec.split(";"):
+        item = item.strip()
+        if not item:
+            continue
+        kind, _, body = item.partition(":")
+        kind = kind.strip()
+        groups = []
+        for g in body.split("-"):
+            g = g.strip()
+            if g in ("全", "*"):
+                groups.append(list(field))
+            else:
+                groups.append([int(x) for x in g.split(",")])
+        if all(len(g) == 1 for g in groups):
+            out.append((kind, tuple(sorted(g[0] for g in groups))))
+        else:
+            for legs in expand_formation(groups, kind, field):
+                out.append((kind, legs))
+    return out
+
+
 def tickets_from_spec(spec: str, assessments: list[Assessment], w: float = AI_WEIGHT) -> list[Ticket]:
     """買い目を明示指定して組む。例 "単勝:13,馬連:9-13,3連複:4-9-13"
 
@@ -236,14 +308,9 @@ def tickets_from_spec(spec: str, assessments: list[Assessment], w: float = AI_WE
             return 0.0
         return (1.0 - TAKEOUT[kind]) / mkt_prob * PAYOUT_HAIRCUT[kind]
 
+    field = [a.horse.num for a in assessments]
     out: list[Ticket] = []
-    for item in spec.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        kind, _, legs_s = item.partition(":")
-        kind = kind.strip()
-        legs = tuple(sorted(int(x) for x in legs_s.split("-")))
+    for kind, legs in parse_spec(_normalize_spec(spec), field):
         if kind not in TAKEOUT:
             raise ValueError(f"未知の券種: {kind}")
         for n in legs:

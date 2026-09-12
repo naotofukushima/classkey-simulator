@@ -318,3 +318,60 @@ def test_回収率が非現実的な水準にならない():
     sim = simulate(picks, a, n=20000)
     assert 0.5 < sim["roi"] < 3.0
     assert 0.0 < sim["hit_rate"] < 1.0
+
+
+# ---------------------------------------------------------------- フォーメーション
+from keiba_ai.portfolio import expand_formation, parse_spec, tickets_from_spec  # noqa: E402
+
+
+def test_フォーメーションが組合せに展開される():
+    field = list(range(1, 17))
+    # 3連複 14 - 10,15 - 全 : 14と(10か15)を含む3頭の組合せ
+    got = parse_spec("3連複:14-10,15-全", field)
+    legs = {t[1] for t in got}
+    assert all(k == "3連複" for k, _ in got)
+    assert all(14 in l and (10 in l or 15 in l) and len(l) == 3 for l in legs)
+    # 10-14-15 は2通りの経路で作れるが1点に畳まれる
+    assert (10, 14, 15) in legs
+    assert len(legs) == 27          # 14通り + 14通り - 重複1
+
+
+def test_順不同の券は重複を畳む():
+    field = [1, 2, 3, 4]
+    got = expand_formation([[1, 2], [1, 2], [3]], "3連複", field)
+    assert got == [(1, 2, 3)]
+
+
+def test_列数が合わなければ弾く():
+    import pytest
+    with pytest.raises(ValueError):
+        parse_spec("3連複:13-15", list(range(1, 17)))
+
+
+def test_単点指定とフォーメーションが混在できる():
+    field = list(range(1, 17))
+    got = parse_spec("単勝:13;3連複:13-4-全", field)
+    assert ("単勝", (13,)) in got
+    assert sum(1 for k, _ in got if k == "3連複") == 14     # 残り14頭
+
+
+def test_カンマ区切りの複数券指定は従来どおり動く():
+    """列内の区切りにも "," を使うので、券の区切りと取り違えないこと。"""
+    field = list(range(1, 17))
+    got = parse_spec("単勝:13,馬連:9-13", field)
+    assert got == [("単勝", (13,)), ("馬連", (9, 13))]
+
+
+def test_軸の選択で期待値が大きく変わる():
+    """3連複フォーメーションの1列目は必ず3着以内に入ることを要求する。
+    複勝圏8%のミッキーゴールドを軸に据えると全点が期待値1未満になる。"""
+    a = _assess()
+    yours = tickets_from_spec("3連複:14-10,15-全", a)
+    swapped = tickets_from_spec("3連複:13-10,15-全", a)
+
+    def roi(ts):
+        return sum(t.ai_prob * t.payout for t in ts) / len(ts)
+
+    assert len(yours) == len(swapped) == 27
+    assert all(t.ev < 1.0 for t in yours)          # 27点すべてマイナス
+    assert roi(swapped) > roi(yours) * 2.5         # 軸を替えるだけで2.5倍以上
