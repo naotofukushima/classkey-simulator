@@ -34,6 +34,12 @@ def main() -> None:
     ap.add_argument("--detail", action="store_true", help="各馬の要素分解を表示")
     ap.add_argument("--scenarios", action="store_true",
                     help="ハナ争いの出方を変えた展開シナリオ別の評価を表示")
+    ap.add_argument("--budget", type=int, default=0,
+                    help="この金額(円)を分数ケリーで配分した買い目を出す 例 --budget 1500")
+    ap.add_argument("--unit", type=int, default=100, help="1点あたりの最低単位(既定100円)")
+    ap.add_argument("--max-lines", type=int, default=8, help="買い目の最大点数")
+    ap.add_argument("--max-horse-share", type=float, default=1.0,
+                    help="1頭に依存する買い目の合計額の上限比率 例 0.7")
     args = ap.parse_args()
 
     race, horses = load_race(args.race_json)
@@ -108,6 +114,10 @@ def main() -> None:
         nums = "-".join(str(x.horse.num) for x in sorted([a, b, c], key=lambda x: x.horse.num))
         print(f"   {nums:<10} 的中率{prob*100:5.2f}%  必要配当 {fair:7.1f}倍")
 
+    if args.budget > 0:
+        _print_portfolio(assessments, args.budget, args.unit, args.max_lines,
+                         args.max_horse_share)
+
     if args.scenarios:
         _print_scenarios(race, horses, assessments)
 
@@ -135,6 +145,50 @@ def main() -> None:
                 print(f"   コース {h.course_note}")
             if h.comment:
                 print(f"   寸評 {h.comment}")
+
+
+def _print_portfolio(assessments, budget: int, unit: int, max_lines: int,
+                     max_horse_share: float = 1.0) -> None:
+    from .portfolio import AI_WEIGHT, allocate, blended_views, build_tickets, market_probs, simulate
+
+    tickets = build_tickets(assessments)
+    picks = allocate(tickets, budget, unit, max_lines, max_horse_share)
+
+    print()
+    print("=" * 96)
+    print(f"  買い目 (予算 {budget:,}円 / {unit}円単位 = {budget // unit}点)")
+    print("=" * 96)
+    if not picks:
+        print("  期待値の条件を満たす買い目がありません。見送り。")
+        return
+
+    mp = market_probs(assessments)
+    bl = {v.horse.num: v.win_prob for v in blended_views(assessments)}
+    print(f"  的中率は AI:市場 = {AI_WEIGHT:.0%}:{1 - AI_WEIGHT:.0%} に寄せた勝率から算出。")
+    print("  AIをそのまま信じると乖離が複数脚に掛かって非現実的な期待値が出るため。")
+    print("  馬連・ワイド・3連複の配当は単勝オッズから逆算した推定値で、実配当とはズレます。")
+    print()
+    print("  【参考】主な馬の勝率:  " + " / ".join(
+        f"{a.horse.num}{a.horse.name} AI{a.win_prob * 100:.0f}%→採用{bl[a.horse.num] * 100:.0f}%"
+        f"(市場{mp[a.horse.num] * 100:.0f}%)" for a in assessments[:4]))
+    print()
+    print(f"  {'券種':<5}{'買い目':<10}{'馬名':<26}{'AI的中率':>9}{'推定配当':>10}{'期待値':>8}{'金額':>8}{'的中時':>9}")
+    print("  " + "-" * 92)
+    for t in picks:
+        names = "・".join(n[:5] for n in t.names)
+        print(f"  {t.kind:<5}{t.label:<10}{names:<26}{t.ai_prob * 100:8.1f}%"
+              f"{t.payout:9.1f}倍{t.ev:8.2f}{t.stake:7,}円{t.stake * t.payout:8,.0f}円")
+    print("  " + "-" * 92)
+
+    sim = simulate(picks, assessments)
+    print(f"  投資 {sim['spent']:,}円  —  モンテカルロ4万回による収支分布")
+    print(f"    期待回収 {sim['mean_return']:,.0f}円 (回収率 {sim['roi'] * 100:.0f}%)")
+    print(f"    1点以上あたる確率 {sim['hit_rate'] * 100:.0f}%"
+          f" / プラス収支になる確率 {sim['profit_rate'] * 100:.0f}%")
+    print(f"    中央値 {sim['median']:,.0f}円 / 上位10% {sim['p90']:,.0f}円"
+          f" / 最大 {sim['max']:,.0f}円")
+    print("    ※馬券同士は同じ馬を含んで強く相関するので、的中率の単純な掛け算では")
+    print("      なく着順そのものを生成して評価しています。")
 
 
 def _print_scenarios(race, horses, base_assessments) -> None:

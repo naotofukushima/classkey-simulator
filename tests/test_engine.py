@@ -232,3 +232,89 @@ def test_展開が振れても上位の序列は大きく崩れない():
     alt_p = {a.horse.num: a.win_prob for a in alt}
     for num, p in base_top.items():
         assert abs(alt_p[num] - p) < 0.05        # 勝率の振れは5ポイント未満
+
+
+# ---------------------------------------------------------------- 買い目の組み立て
+from keiba_ai.portfolio import (  # noqa: E402
+    AI_WEIGHT, PAYOUT_HAIRCUT, allocate, blended_views, build_tickets, market_probs, simulate,
+)
+
+
+def _assess():
+    race, horses = load_race(RACE_JSON)
+    return evaluate(horses, race)[0]
+
+
+def test_市場勝率は正規化されている():
+    a = _assess()
+    mp = market_probs(a)
+    assert abs(sum(mp.values()) - 1.0) < 1e-9
+    # 単勝オッズが低いほど市場勝率は高い
+    fav = min(a, key=lambda x: x.horse.odds).horse.num
+    assert mp[fav] == max(mp.values())
+
+
+def test_採用勝率はAIと市場の間に入る():
+    """AIをそのまま使うと乖離が複数脚に掛かって非現実的な期待値になるため寄せる。"""
+    a = _assess()
+    mp = market_probs(a)
+    bl = {v.horse.num: v.win_prob for v in blended_views(a)}
+    assert abs(sum(bl.values()) - 1.0) < 1e-9
+    grand = next(x for x in a if x.horse.name == "グランヴィノス")
+    n = grand.horse.num
+    assert mp[n] < bl[n] < grand.win_prob          # 市場 < 採用 < AI
+    assert AI_WEIGHT < 0.5                          # 未検証モデルなので市場を主にする
+
+
+def test_配当推定には保守的な割引がかかる():
+    a = _assess()
+    tickets = build_tickets(a, min_ev=0.0, min_prob=0.0)
+    wide = next(t for t in tickets if t.kind == "ワイド")
+    mkt_implied = (1 - 0.235) / 1.0                 # 割引がなければ (1-控除率)/的中率
+    assert PAYOUT_HAIRCUT["ワイド"] < 1.0
+    assert PAYOUT_HAIRCUT["単勝"] == 1.0            # 単勝は実オッズなので割引不要
+    tan = next(t for t in tickets if t.kind == "単勝")
+    assert tan.payout == next(x for x in a if x.horse.num == tan.legs[0]).horse.odds
+    assert wide.payout > 0 and mkt_implied > 0
+
+
+def test_配分は予算と単位を守る():
+    a = _assess()
+    picks = allocate(build_tickets(a), budget=1500, unit=100, max_lines=8)
+    assert sum(t.stake for t in picks) == 1500
+    assert all(t.stake % 100 == 0 and t.stake > 0 for t in picks)
+    assert len(picks) <= 8
+
+
+def test_集中度の上限で1頭への依存が下がる():
+    a = _assess()
+    free = allocate(build_tickets(a), 1500, 100, 8)
+    capped = allocate(build_tickets(a), 1500, 100, 8, max_horse_share=0.65)
+
+    def share(picks, num):
+        tot = sum(t.stake for t in picks)
+        return sum(t.stake for t in picks if num in t.legs) / tot
+
+    grand = next(x for x in a if x.horse.name == "グランヴィノス").horse.num
+    assert share(capped, grand) <= share(free, grand)
+    assert sum(t.stake for t in capped) == 1500
+
+
+def test_モンテカルロの的中率は単券の的中率と整合する():
+    """単勝1点だけ買えば、的中率は採用勝率に一致するはず。"""
+    a = _assess()
+    tickets = build_tickets(a, min_ev=0.0, min_prob=0.0)
+    tan = next(t for t in tickets if t.kind == "単勝" and t.legs[0] == 13)
+    tan.stake = 1500
+    sim = simulate([tan], a, n=20000)
+    assert abs(sim["hit_rate"] - tan.ai_prob) < 0.02
+    assert abs(sim["roi"] - tan.ev) < 0.25
+
+
+def test_回収率が非現実的な水準にならない():
+    """AIをそのまま信じると回収率690%などという数字が出る。寄せた後は常識的な範囲に。"""
+    a = _assess()
+    picks = allocate(build_tickets(a), 1500, 100, 8, max_horse_share=0.65)
+    sim = simulate(picks, a, n=20000)
+    assert 0.5 < sim["roi"] < 3.0
+    assert 0.0 < sim["hit_rate"] < 1.0
