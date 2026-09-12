@@ -17,6 +17,8 @@ from .models import PastRun
 
 def _saturate(x: float, cap: float) -> float:
     """tanh で滑らかに飽和させる。極端値を潰しつつ大小関係は保たれる。"""
+    if cap <= 0:
+        return 0.0          # cap=0 は「この軸を無効化する」指定
     return cap * math.tanh(x / cap)
 
 # ---------------------------------------------------------------- 基準タイム
