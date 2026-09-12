@@ -31,9 +31,12 @@ def main() -> None:
     print(f"想定ペース: {meta['pace']}  — {meta['pace_reason']}")
     print()
 
-    print(f"{'印':<3}{'馬番':>3} {'馬名':<11}{'スコア':>7}{'勝率':>7}{'複勝率':>8}"
+    if getattr(race, "odds_asof", ""):
+        print(f"オッズ基準時刻: {race.odds_asof}")
+        print()
+    print(f"{'印':<3}{'馬番':>3} {'馬名':<11}{'スコア':>7}{'速度':>7}{'勝率':>7}{'複勝率':>8}"
           f"{'想定':>8}{'実オッズ':>9}{'期待値':>7}  {'脚質':<4}{'負担率':>7}")
-    print("-" * 96)
+    print("-" * 103)
     for i, a in enumerate(assessments):
         h = a.horse
         mark = MARKS[i] if i < len(MARKS) else "  "
@@ -41,7 +44,8 @@ def main() -> None:
         ev_s = f"{ev:5.2f}" if ev is not None else "  -  "
         odds_s = f"{h.odds:7.1f}" if h.odds else "   -   "
         name = h.name + "　" * max(0, (11 - len(h.name)) // 2)
-        print(f"{mark:<3}{h.num:>3} {name:<11}{a.total:7.2f}{a.win_prob*100:6.1f}%"
+        sp_s = f"{a.best_speed:7.1f}" if a.best_speed is not None else "      -"
+        print(f"{mark:<3}{h.num:>3} {name:<11}{a.total:7.2f}{sp_s}{a.win_prob*100:6.1f}%"
               f"{a.place3_prob*100:7.1f}%{a.fair_odds:8.1f}{odds_s}{ev_s:>7}  "
               f"{h.style:<4}{h.burden_ratio*100:6.2f}%")
 
@@ -77,7 +81,9 @@ def main() -> None:
             h = a.horse
             print(f"\n【{h.num}】{h.name} ({h.sex}{h.age}) 斤量{h.carried}kg {h.jockey}"
                   f"  — 総合 {a.total:.2f} / 勝率 {a.win_prob*100:.1f}%")
-            print(f"   能力指数(直近上位3走の加重平均): {a.base:.2f}")
+            print(f"   能力指数(直近上位3走の加重平均): {a.base:.2f}"
+                  + (f" / 最高速度指数 {a.best_speed:.1f} — {a.best_speed_race}"
+                     if a.best_speed is not None else ""))
             print(f"   採用走: {a.notes['実績']}")
             for k, v in a.factors.items():
                 bar = "+" if v >= 0 else "-"

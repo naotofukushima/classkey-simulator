@@ -89,3 +89,71 @@ def test_負担率は斤量を馬体重で割った値():
     assert abs(h.burden_ratio - 56.0 / 532) < 1e-9
     # 532kgに56kgはメンバー最軽量の負担率
     assert h.burden_ratio == min(x.burden_ratio for x in horses)
+
+
+# ---------------------------------------------------------------- 速度指数・ラップ
+from keiba_ai.speed import LAP_CAP, SPEED_CAP, lap_adjustment, speed_rating  # noqa: E402
+
+
+def _timed(**kw) -> PastRun:
+    base = dict(track="阪神芝2000", time=118.0, distance=2000, grade="G3", going="良")
+    base.update(kw)
+    return _run(**base)
+
+
+def test_タイムが無ければ速度指数は出ない():
+    assert speed_rating(_run())[0] is None                     # time なし
+    assert speed_rating(_timed(track="未知の競馬場"))[0] is None  # 基準タイム未登録
+
+
+def test_速いタイムほど速度指数は高い():
+    fast, _ = speed_rating(_timed(time=117.0))
+    slow, _ = speed_rating(_timed(time=119.0))
+    assert fast > slow
+    # 阪神芝2000の基準117.8秒どおりに走れば中心値96.0
+    even, _ = speed_rating(_timed(time=117.8))
+    assert abs(even - 96.0) < 1e-6
+
+
+def test_時計のかかる馬場は割り引かれない():
+    """重馬場で同じ時計なら、良馬場より高く評価されるべき。"""
+    good, _ = speed_rating(_timed(going="良"))
+    heavy, _ = speed_rating(_timed(going="重"))
+    assert heavy > good
+
+
+def test_下のクラスで同じ時計を出す方が価値が高い():
+    g1, _ = speed_rating(_timed(grade="G1"))
+    c3, _ = speed_rating(_timed(grade="3勝"))
+    assert c3 > g1
+
+
+def test_速度指数は飽和して発散しない():
+    """コースレコード級でも上限付近に収まり、順序は保たれる。"""
+    a, _ = speed_rating(_timed(time=112.0))
+    b, _ = speed_rating(_timed(time=110.0))
+    assert a < b < 96.0 + SPEED_CAP
+
+
+def test_前めの位置で速い上がりを使う方が高く評価される():
+    front = lap_adjustment(_run(last3f=34.0, passes=[2, 2, 2, 2], field_size=16))
+    back = lap_adjustment(_run(last3f=34.0, passes=[14, 14, 13, 12], field_size=16))
+    assert front > back > 0
+    assert abs(front) <= LAP_CAP
+
+
+def test_遅い上がりはマイナス補正():
+    assert lap_adjustment(_run(last3f=37.0, passes=[3, 3, 3, 3], field_size=16)) < 0
+
+
+def test_レコード勝ちが能力指数に反映される():
+    """マリアイリダータの前走は福島芝2000のコースレコード1:56.7。
+    着差だけの評価では3勝クラスの1勝に過ぎず、速度軸で初めて価値が出る。"""
+    from keiba_ai.ratings import best_speed
+
+    _, horses = load_race(RACE_JSON)
+    maria = next(h for h in horses if h.name == "マリアイリダータ")
+    sp, run = best_speed(maria)
+    assert run.race == "バーデンバーデンC" and run.time == 116.7
+    assert sp > 100.0                       # G3水準(96)を大きく上回る
+    assert sp == max(s for s in (best_speed(h)[0] for h in horses) if s)  # 全馬中最速

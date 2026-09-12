@@ -8,6 +8,7 @@ from __future__ import annotations
 import math
 from datetime import date
 
+from .speed import lap_adjustment, speed_rating
 from .models import (
     CLASS_BASE,
     SURFACE_MISMATCH_DISCOUNT,
@@ -23,9 +24,15 @@ SEC_TO_POINTS = 8.0
 KG_TO_POINTS = 1.6
 MARGIN_CAP = 4.0
 
+# 着差ベースの指数と速度指数の配合比。
+# 着差はそのレース内の相対評価なので馬場差に強いが、レース全体の質が分からない。
+# 速度指数は絶対値を掴めるが日々の馬場差というノイズを持つ。両方を混ぜる。
+W_MARGIN = 0.65
+W_SPEED = 0.35
+
 
 def run_rating(run: PastRun, target_surface: str = "芝", sex: str = "牡") -> float:
-    """1走のパフォーマンス指数。"""
+    """1走のパフォーマンス指数(着差ベース×速度指数 + ラップ補正)。"""
     base = CLASS_BASE.get(run.grade, 70.0)
     if run.three_yo_only:
         base -= THREE_YO_ONLY_DISCOUNT
@@ -42,7 +49,15 @@ def run_rating(run: PastRun, target_surface: str = "芝", sex: str = "牡") -> f
     # 芝のレースを予想するのにダート実績は直接は使えない
     if run.surface != target_surface:
         pts -= SURFACE_MISMATCH_DISCOUNT
+        return pts       # ダート戦に芝の基準タイムは当てられない
 
+    # 走破タイムがあれば速度指数とブレンドする
+    sp, _ = speed_rating(run)
+    if sp is not None:
+        pts = W_MARGIN * pts + W_SPEED * sp
+
+    # 上がり3F を位置取りで重み付けした持続力の補正
+    pts += lap_adjustment(run)
     return pts
 
 
@@ -96,3 +111,28 @@ def improving_form(horse: Horse) -> tuple[float, str]:
     if wins >= 1 and rising and recent[0].finish <= 3:
         return 0.5, "昇級後も崩れず"
     return 0.0, ""
+
+
+def run_explain(run: PastRun, sex: str = "牡") -> str:
+    """1走の指数の内訳を人が読める形で返す(デバッグ・説明用)。"""
+    sp, detail = speed_rating(run)
+    lap = lap_adjustment(run)
+    parts = [f"総合{run_rating(run, '芝', sex):.1f}"]
+    if sp is not None:
+        parts.append(f"速度{sp:.1f}({detail})")
+    else:
+        parts.append(f"速度-({detail})")
+    parts.append(f"ラップ{lap:+.2f}")
+    return " / ".join(parts)
+
+
+def best_speed(horse: Horse) -> tuple[float | None, PastRun | None]:
+    """その馬の最高速度指数と、それを記録した走を返す。"""
+    best, best_run = None, None
+    for r in horse.runs:
+        if not r.is_turf:
+            continue
+        sp, _ = speed_rating(r)
+        if sp is not None and (best is None or sp > best):
+            best, best_run = sp, r
+    return best, best_run

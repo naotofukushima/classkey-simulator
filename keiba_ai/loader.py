@@ -22,7 +22,7 @@ def load_race(path: str | Path) -> tuple[RaceConditions, list[Horse]]:
         going=r["going"], weather=r["weather"], cushion=r.get("cushion"),
         moisture=r.get("moisture"), meeting_week=r.get("meeting_week"),
         bias_inside=r.get("bias_inside", 0.0), bias_closer=r.get("bias_closer", 0.0),
-        note=r.get("note", ""),
+        odds_asof=r.get("odds_asof", ""), note=r.get("note", ""),
     )
 
     horses = []
@@ -36,6 +36,7 @@ def load_race(path: str | Path) -> tuple[RaceConditions, list[Horse]]:
                 passes=x.get("passes", []), body_weight=x.get("body_weight"),
                 three_yo_only=x.get("three_yo_only", False), course=x.get("course"),
                 ref_weight=x.get("ref_weight"),
+                time=x.get("time"), track=x.get("track"),
                 note=x.get("note", ""),
             )
             for x in h["runs"]

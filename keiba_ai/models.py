@@ -54,6 +54,8 @@ class PastRun:
     three_yo_only: bool = False
     course: Optional[str] = None       # 例 "阪神芝2000内"
     ref_weight: Optional[float] = None  # そのレースの標準斤量(定量/別定/ハンデ)
+    time: Optional[float] = None        # 自身の走破タイム(秒)
+    track: Optional[str] = None         # 基準タイム参照用のキー 例 "阪神芝2000"
     note: str = ""
 
     @property
@@ -130,4 +132,5 @@ class RaceConditions:
     meeting_week: Optional[int] = None   # 開催何週目か
     bias_inside: float = 0.0   # 正=内有利 / 負=外有利
     bias_closer: float = 0.0   # 正=差し有利 / 負=先行有利
+    odds_asof: str = ""        # オッズの取得時刻
     note: str = ""

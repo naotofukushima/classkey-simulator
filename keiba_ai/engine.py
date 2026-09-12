@@ -9,7 +9,7 @@ from .jockey import jockey_points, workout_points
 from .models import Horse, RaceConditions
 from .pace import classify_pace, draw_points, pace_points
 from .pedigree import pedigree_score
-from .ratings import ability, improving_form
+from .ratings import ability, best_speed, improving_form
 
 # ---------------------------------------------------------------- 確率変換の根拠
 # 同じ馬でも走るたびにパフォーマンスはブレる。実測ではそのブレ幅(標準偏差)は
@@ -26,6 +26,8 @@ TEMPERATURE = PERFORMANCE_SD / 1.283
 class Assessment:
     horse: Horse
     base: float
+    best_speed: float | None = None
+    best_speed_race: str = ""
     factors: dict[str, float] = field(default_factory=dict)
     notes: dict[str, str] = field(default_factory=dict)
     win_prob: float = 0.0
@@ -55,6 +57,9 @@ def evaluate(horses: list[Horse], race: RaceConditions) -> tuple[list[Assessment
     for h in horses:
         base, breakdown = ability(h, race)
         a = Assessment(horse=h, base=base)
+        sp, sp_run = best_speed(h)
+        a.best_speed = sp
+        a.best_speed_race = f"{sp_run.race}({sp_run.time:.1f}秒)" if sp_run and sp_run.time else ""
 
         a.factors["ハンデ(負担率)"], burden_detail = burden_points(h, horses)
         a.factors["斤量増減"], delta = weight_change_points(h)
