@@ -40,6 +40,8 @@ def main() -> None:
     ap.add_argument("--max-lines", type=int, default=8, help="買い目の最大点数")
     ap.add_argument("--max-horse-share", type=float, default=1.0,
                     help="1頭に依存する買い目の合計額の上限比率 例 0.7")
+    ap.add_argument("--tickets", default="",
+                    help='買い目を明示指定する 例 "単勝:13,馬連:9-13,3連複:4-9-13"')
     args = ap.parse_args()
 
     race, horses = load_race(args.race_json)
@@ -116,7 +118,7 @@ def main() -> None:
 
     if args.budget > 0:
         _print_portfolio(assessments, args.budget, args.unit, args.max_lines,
-                         args.max_horse_share)
+                         args.max_horse_share, args.tickets)
 
     if args.scenarios:
         _print_scenarios(race, horses, assessments)
@@ -148,11 +150,17 @@ def main() -> None:
 
 
 def _print_portfolio(assessments, budget: int, unit: int, max_lines: int,
-                     max_horse_share: float = 1.0) -> None:
-    from .portfolio import AI_WEIGHT, allocate, blended_views, build_tickets, market_probs, simulate
+                     max_horse_share: float = 1.0, spec: str = "") -> None:
+    from .portfolio import (AI_WEIGHT, allocate, blended_views, build_tickets,
+                            market_probs, simulate, tickets_from_spec)
 
-    tickets = build_tickets(assessments)
-    picks = allocate(tickets, budget, unit, max_lines, max_horse_share)
+    if spec:
+        tickets = tickets_from_spec(spec, assessments)
+        picks = allocate(tickets, budget, unit, max_lines=len(tickets),
+                         max_horse_share=max_horse_share, min_units=1)
+    else:
+        tickets = build_tickets(assessments)
+        picks = allocate(tickets, budget, unit, max_lines, max_horse_share)
 
     print()
     print("=" * 96)

@@ -15,17 +15,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import combinations
 
-from .betting import exacta_pair_prob, trio_prob
+from .betting import LAMBDA2, LAMBDA3, exacta_pair_prob, trio_prob
 from .engine import Assessment
 
 # JRAの控除率
 TAKEOUT = {"単勝": 0.20, "馬連": 0.225, "ワイド": 0.235, "3連複": 0.25}
 
-# Harville近似は的中率を低く見積もりがちで、その分だけ推定配当が楽観側に振れる。
-# 特にワイドは「3着以内に2頭」という緩い条件なので誤差が大きく、実配当は
-# 推定より明確に安くなる。買う前提の数字なので保守側に割り引く。
-# (単勝は実オッズを使うので割引不要)
-PAYOUT_HAIRCUT = {"単勝": 1.0, "馬連": 0.90, "ワイド": 0.70, "3連複": 0.85}
+# 単勝オッズだけから複勝系の配当を当てるのは原理的に無理がある。
+#
+# Harville に Lo-Bacon-Shone のべき乗補正を入れても、実勢の経験則
+# (馬連 ≒ 単勝オッズの積 / 3) に対してなお1.5〜1.9倍高く出る。
+# どちらが正しいとも言い切れないので、両者の中間よりやや保守側に置く。
+# 配当を低く見積もる誤りは「買わない」方向に効くので、買う判断をする側としては安全。
+# 実際の購入前には必ず本物のオッズを確認すること。
+PAYOUT_HAIRCUT = {"単勝": 1.0, "馬連": 0.75, "ワイド": 0.70, "3連複": 0.70}
 
 # ケリー係数。1.0が理論最適だが、推定確率の誤差に極めて弱いので大きく縮める。
 KELLY_FRACTION = 0.25
@@ -94,7 +97,7 @@ def blended_views(assessments: list[Assessment], w: float = AI_WEIGHT) -> list[_
 
 def _pair_in_top3(views, a, b) -> float:
     """A と B がともに3着以内に入る確率(=ワイドの的中率)。"""
-    return sum(trio_prob(a, b, c) for c in views if c is not a and c is not b)
+    return sum(trio_prob(a, b, c, views) for c in views if c is not a and c is not b)
 
 
 def build_tickets(
@@ -130,8 +133,8 @@ def build_tickets(
         legs = tuple(sorted((nx, ny)))
         names = tuple(ai[n].horse.name for n in legs)
 
-        mkt = exacta_pair_prob(vmap[nx], vmap[ny])
-        tickets.append(Ticket("馬連", legs, names, exacta_pair_prob(x, y), payout("馬連", mkt)))
+        mkt = exacta_pair_prob(vmap[nx], vmap[ny], views)
+        tickets.append(Ticket("馬連", legs, names, exacta_pair_prob(x, y, bl), payout("馬連", mkt)))
 
         mkt_w = _pair_in_top3(views, vmap[nx], vmap[ny])
         tickets.append(Ticket("ワイド", legs, names, _pair_in_top3(bl, x, y), payout("ワイド", mkt_w)))
@@ -139,8 +142,8 @@ def build_tickets(
     for x, y, z in combinations(pool, 3):
         legs = tuple(sorted((x.horse.num, y.horse.num, z.horse.num)))
         names = tuple(ai[n].horse.name for n in legs)
-        mkt = trio_prob(vmap[legs[0]], vmap[legs[1]], vmap[legs[2]])
-        tickets.append(Ticket("3連複", legs, names, trio_prob(x, y, z), payout("3連複", mkt)))
+        mkt = trio_prob(vmap[legs[0]], vmap[legs[1]], vmap[legs[2]], views)
+        tickets.append(Ticket("3連複", legs, names, trio_prob(x, y, z, bl), payout("3連複", mkt)))
 
     good = [t for t in tickets if t.ev >= min_ev and t.ai_prob >= min_prob]
     return sorted(good, key=lambda t: -t.ev)
@@ -148,7 +151,7 @@ def build_tickets(
 
 def allocate(
     tickets: list[Ticket], budget: int, unit: int = 100, max_lines: int = 8,
-    max_horse_share: float = 1.0,
+    max_horse_share: float = 1.0, min_units: int = 0,
 ) -> list[Ticket]:
     """分数ケリーで賭け金を配分し、単位金額に丸める。
 
@@ -175,6 +178,17 @@ def allocate(
     if not scored:
         return []
 
+    # 買い目を人が指定した場合は、全点に最低1単位を確保してから残りを配分する
+    floor = 0
+    if min_units > 0:
+        floor = min_units * len(scored)
+        if floor > n_units:
+            raise ValueError(
+                f"予算が足りません: {len(scored)}点 × {min_units}単位 に "
+                f"{floor * unit:,}円 必要ですが予算は {budget:,}円です"
+            )
+        n_units -= floor
+
     if max_horse_share < 1.0:
         scored = _cap_concentration(scored, max_horse_share)
 
@@ -189,10 +203,60 @@ def allocate(
 
     out = []
     for t, u in alloc:
-        if u > 0:
-            t.stake = u * unit
+        total_u = u + min_units
+        if total_u > 0:
+            t.stake = total_u * unit
             out.append(t)
-    return sorted(out, key=lambda t: -t.stake)
+    return sorted(out, key=lambda t: (-t.stake, -t.ev))
+
+
+def tickets_from_spec(spec: str, assessments: list[Assessment], w: float = AI_WEIGHT) -> list[Ticket]:
+    """買い目を明示指定して組む。例 "単勝:13,馬連:9-13,3連複:4-9-13"
+
+    build_tickets が期待値で自動的に絞るのに対し、こちらは買う券を人が決める。
+    的中率と推定配当の計算は build_tickets と同じ経路を通す。
+    """
+    views = _market_views(assessments)
+    vmap = {v.horse.num: v for v in views}
+    bl = blended_views(assessments, w)
+    bmap = {v.horse.num: v for v in bl}
+    ai = {a.horse.num: a for a in assessments}
+
+    def payout(kind: str, mkt_prob: float) -> float:
+        if mkt_prob <= 0:
+            return 0.0
+        return (1.0 - TAKEOUT[kind]) / mkt_prob * PAYOUT_HAIRCUT[kind]
+
+    out: list[Ticket] = []
+    for item in spec.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        kind, _, legs_s = item.partition(":")
+        kind = kind.strip()
+        legs = tuple(sorted(int(x) for x in legs_s.split("-")))
+        if kind not in TAKEOUT:
+            raise ValueError(f"未知の券種: {kind}")
+        for n in legs:
+            if n not in ai:
+                raise ValueError(f"馬番{n}はこのレースにいません")
+        names = tuple(ai[n].horse.name for n in legs)
+
+        if kind == "単勝":
+            out.append(Ticket(kind, legs, names, bmap[legs[0]].win_prob, ai[legs[0]].horse.odds))
+        elif kind == "馬連":
+            mkt = exacta_pair_prob(vmap[legs[0]], vmap[legs[1]], views)
+            prob = exacta_pair_prob(bmap[legs[0]], bmap[legs[1]], bl)
+            out.append(Ticket(kind, legs, names, prob, payout(kind, mkt)))
+        elif kind == "ワイド":
+            mkt = _pair_in_top3(views, vmap[legs[0]], vmap[legs[1]])
+            prob = _pair_in_top3(bl, bmap[legs[0]], bmap[legs[1]])
+            out.append(Ticket(kind, legs, names, prob, payout(kind, mkt)))
+        else:  # 3連複
+            mkt = trio_prob(*(vmap[n] for n in legs), field=views)
+            prob = trio_prob(*(bmap[n] for n in legs), field=bl)
+            out.append(Ticket(kind, legs, names, prob, payout(kind, mkt)))
+    return out
 
 
 # ---------------------------------------------------------------- 収支の検証
@@ -219,11 +283,14 @@ def simulate(
         # 着順を上位3着まで逐次サンプリング
         pool_n, pool_w = list(nums), list(weights)
         top: list[int] = []
-        for _ in range(3):
-            total = sum(pool_w)
+        for step in range(3):
+            # 2着・3着の抽出はべき乗補正を掛ける(確率計算側と揃える)
+            lam = (1.0, LAMBDA2, LAMBDA3)[step]
+            ws = [w_ ** lam for w_ in pool_w]
+            total = sum(ws)
             r = rng.random() * total
             acc = 0.0
-            for i, wt in enumerate(pool_w):
+            for i, wt in enumerate(ws):
                 acc += wt
                 if r <= acc:
                     top.append(pool_n[i])
