@@ -157,3 +157,78 @@ def test_レコード勝ちが能力指数に反映される():
     assert run.race == "バーデンバーデンC" and run.time == 116.7
     assert sp > 100.0                       # G3水準(96)を大きく上回る
     assert sp == max(s for s in (best_speed(h)[0] for h in horses) if s)  # 全馬中最速
+
+
+# ---------------------------------------------------------------- ラップ特性
+from keiba_ai.lapprofile import COURSE_PROFILES, predict_lap, run_shape  # noqa: E402
+
+
+def test_parラップは基準タイムと整合する():
+    """阪神芝2000のparは2025年チャレンジC実ラップ由来。合計は基準タイム117.8秒。"""
+    from keiba_ai.speed import STANDARD_TIMES
+
+    prof = COURSE_PROFILES["阪神芝2000"]
+    assert len(prof.par) == 10
+    assert abs(prof.par_time - STANDARD_TIMES["阪神芝2000"]) < 0.05
+
+
+def test_逃げ馬が多いほど前半が速く終いが掛かる():
+    race, horses = load_race(RACE_JSON)
+    many = predict_lap(race, horses)
+
+    # 逃げ2頭を控えさせる
+    import copy
+    few = copy.deepcopy(horses)
+    for h in few:
+        if h.num in (5, 12):
+            h.style = "先行"
+    single = predict_lap(race, few)
+
+    assert many.first1000 < single.first1000     # テンが速い
+    assert many.last3f > single.last3f           # 終いが掛かる
+    assert many.balance > single.balance         # より前傾
+
+
+def test_ペース判定はコースのparとの差で行う():
+    """阪神内2000はparの時点で前傾。絶対値判定だと常にハイペースになってしまう。"""
+    race, horses = load_race(RACE_JSON)
+    lap = predict_lap(race, horses)
+    assert lap.par_balance > 0                   # parからして前傾寄り
+    assert lap.balance > lap.par_balance         # 今回はさらに前傾
+    assert "前傾" in lap.pace_label
+
+
+def test_ラップ形状は前傾で正になる():
+    """上がりが均等ペースより掛かった=前半が速かった、と読む。"""
+    fast_finish = _timed(time=118.0, last3f=34.0)     # 均等なら35.4
+    slow_finish = _timed(time=118.0, last3f=36.5)
+    assert run_shape(fast_finish) < 0 < run_shape(slow_finish)
+
+
+def test_1人気は上がり勝負向きと判定される():
+    """マテンロウゲイルの最高パフォーマンス(ダービー5着)は最も後傾のレース。
+    前傾の消耗戦になる今回は、その適性がマイナスに働く。"""
+    race, horses = load_race(RACE_JSON)
+    a_list, _ = evaluate(horses, race)
+    gale = next(a for a in a_list if a.horse.name == "マテンロウゲイル")
+    grand = next(a for a in a_list if a.horse.name == "グランヴィノス")
+    assert gale.factors["ラップ適性"] < 0
+    assert grand.factors["ラップ適性"] > 0
+
+
+def test_展開が振れても上位の序列は大きく崩れない():
+    """ハナ争いの出方は当日次第なので、結論が展開に過敏だと使えない。"""
+    import copy
+
+    race, horses = load_race(RACE_JSON)
+    base, _ = evaluate(horses, race)
+    base_top = {a.horse.num: a.win_prob for a in base[:5]}
+
+    slow = copy.deepcopy(horses)
+    for h in slow:
+        if h.num in (5, 12):
+            h.style = "先行"
+    alt, _ = evaluate(slow, race)
+    alt_p = {a.horse.num: a.win_prob for a in alt}
+    for num, p in base_top.items():
+        assert abs(alt_p[num] - p) < 0.05        # 勝率の振れは5ポイント未満

@@ -9,7 +9,8 @@ from .jockey import jockey_points, workout_points
 from .models import Horse, RaceConditions
 from .pace import classify_pace, draw_points, pace_points
 from .pedigree import pedigree_score
-from .ratings import ability, best_speed, improving_form
+from .lapprofile import lap_aptitude, predict_lap
+from .ratings import ability, all_run_ratings, best_speed, improving_form
 
 # ---------------------------------------------------------------- 確率変換の根拠
 # 同じ馬でも走るたびにパフォーマンスはブレる。実測ではそのブレ幅(標準偏差)は
@@ -52,6 +53,7 @@ class Assessment:
 def evaluate(horses: list[Horse], race: RaceConditions) -> tuple[list[Assessment], dict]:
     pace, pace_why = classify_pace(horses)
     n = len(horses)
+    lap = predict_lap(race, horses)
 
     assessments: list[Assessment] = []
     for h in horses:
@@ -72,6 +74,11 @@ def evaluate(horses: list[Horse], race: RaceConditions) -> tuple[list[Assessment
         a.factors["騎手/厩舎"] = jk_pts
         a.factors["追い切り"] = workout_points(h.workout)
         a.factors["ローテ"], days = layoff_points(h, race.date)
+        if lap is not None:
+            shape_pts, corner_pts, lap_note = lap_aptitude(h, lap, all_run_ratings(h, race))
+            a.factors["ラップ適性"] = shape_pts
+            a.factors["4角位置"] = corner_pts
+            a.notes["ラップ"] = lap_note
         imp_pts, imp_why = improving_form(h)
         a.factors["上昇度"] = imp_pts
         # 3歳馬は古馬より秋にかけて伸びる余地がある
@@ -94,7 +101,7 @@ def evaluate(horses: list[Horse], race: RaceConditions) -> tuple[list[Assessment
     _assign_probabilities(assessments)
     assessments.sort(key=lambda a: a.total, reverse=True)
 
-    meta = {"pace": pace, "pace_reason": pace_why, "field_size": n}
+    meta = {"pace": pace, "pace_reason": pace_why, "field_size": n, "lap": lap}
     return assessments, meta
 
 

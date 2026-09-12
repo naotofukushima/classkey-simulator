@@ -136,3 +136,8 @@ def best_speed(horse: Horse) -> tuple[float | None, PastRun | None]:
         if sp is not None and (best is None or sp > best):
             best, best_run = sp, r
     return best, best_run
+
+
+def all_run_ratings(horse: Horse, race: RaceConditions) -> list[tuple[PastRun, float]]:
+    """全過去走の指数。ラップ適性の算出などで全サンプルが要る場合に使う。"""
+    return [(r, run_rating(r, race.surface, horse.sex)) for r in horse.runs if r.is_turf]
