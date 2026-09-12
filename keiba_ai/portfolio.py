@@ -170,8 +170,17 @@ def allocate(
             continue
         kelly = (t.ai_prob * b - (1 - t.ai_prob)) / b     # 最適賭け金比率
         if kelly <= 0:
-            continue
+            # 期待値が1を下回る券。自動選択なら買わないが、
+            # 人が「この買い目で」と指定した場合は配分対象に残す
+            # (本来は買うべきでないことは呼び出し側で警告する)
+            if min_units <= 0:
+                continue
+            kelly = 0.0
         scored.append((t, kelly * KELLY_FRACTION))
+
+    if min_units > 0 and all(w <= 0 for _, w in scored):
+        # 全点が期待値マイナスのときは期待値の大小で按分する
+        scored = [(t, max(t.ev, 1e-6)) for t, _ in scored]
 
     scored.sort(key=lambda x: -x[1])
     scored = scored[:max_lines]
